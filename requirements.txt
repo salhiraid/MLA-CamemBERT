@@ -1,0 +1,8 @@
+ipykernel
+torch
+torchvision
+torchaudio
+datasets
+transformers
+datasets
+dataclasses
