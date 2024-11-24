@@ -1,6 +1,9 @@
 import torch
 import torch.nn as nn
 import math
+from typing import List, Optional, Tuple, Union
+from packaging import version
+from transformers.utils import logging
 
 # Classes to code : 
 # Embedding
@@ -13,12 +16,6 @@ import math
 # CamemBERT Model
 # We can add the 4 classes to fine-tune the model on the 4 donwsteam tasks
 # + one class to load directly a pretrained model
-import torch
-import torch.nn as nn
-import math
-from typing import List, Optional, Tuple, Union
-from packaging import version
-from transformers.utils import logging
 
 logger = logging.get_logger(__name__)
 
