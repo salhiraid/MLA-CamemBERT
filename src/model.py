@@ -1,8 +1,6 @@
 import torch
 import torch.nn as nn
 import math
-from dataclasses import dataclass
-
 
 # Classes to code : 
 # Embedding
@@ -17,35 +15,7 @@ from dataclasses import dataclass
 # + one class to load directly a pretrained model
 
 
-#  12 layers, 768 hidden dimensions, 12 attention heads, 110M parameters
-@dataclass
-class GPTConfig:
-    block_size: int = 1024 # max sequence length
-    vocab_size: int = 32000 # number of tokens: 50,000 BPE merges + 256 bytes tokens + 1 <|endoftext|> token
-    n_layer: int = 12 # number of layers
-    n_head: int = 12 # number of heads
-    n_embd: int = 768 # embedding dimension
-
-config_args = {
-    "block_size": 2048,
-    "vocab_size": 32000,
-    "n_layer": 12,
-    "n_head": 12,
-    "n_embd": 768
-}
-
-config = GPTConfig(config_args)
-print(config)
-
-
-class Embeddings(nn.Module):
-    def __init__(self, config):
-        super.__init__()
-        self.config = config
-
-
-
-class SelfAttention(nn.Module):
+class SelfAttention(nn.module):
     def __init__(self, hidden_size, num_attention_heads, attention_dropout):
         super(SelfAttention, self).__init__()
         self.num_attention_heads = num_attention_heads
