@@ -19,6 +19,37 @@ from transformers.utils import logging
 
 logger = logging.get_logger(__name__)
 
+class CamembertEmbeddings(nn.Module):
+    def __init__(self, config):
+        super().__init__()
+        self.word_embeddings = nn.Embedding(config.vocab_size, config.hidden_size, padding_idx=config.pad_token_id)
+        self.position_embeddings = nn.Embedding(config.max_position_embeddings, config.hidden_size, padding_idx=config.pad_token_id)
+        self.token_type_embeddings = nn.Embedding(config.type_vocab_size, config.hidden_size)
+        self.LayerNorm = nn.LayerNorm(config.hidden_size, eps=config.layer_norm_eps)
+        self.dropout = nn.Dropout(config.hidden_dropout_prob)
+
+        self.position_ids = torch.arange(config.max_position_embeddings).unsqueeze(0)  # Shape (1, max_position_embeddings)
+        self.token_type_ids = torch.zeros_like(self.position_ids, dtype=torch.long)  # Shape (1, max_position_embeddings)
+
+    def forward(self, input_ids, token_type_ids=None, position_ids=None):
+        input_shape = input_ids.size()
+        batch_size, seq_length = input_shape
+
+        if position_ids is None:
+            position_ids = self.position_ids[:, :seq_length].to(input_ids.device)
+        if token_type_ids is None:
+            token_type_ids = self.token_type_ids[:, :seq_length].expand(batch_size, seq_length).to(input_ids.device)
+
+        inputs_embeds = self.word_embeddings(input_ids)
+        position_embeds = self.position_embeddings(position_ids)
+        token_type_embeds = self.token_type_embeddings(token_type_ids)
+        embeddings = inputs_embeds + position_embeds + token_type_embeds
+
+        embeddings = self.LayerNorm(embeddings)
+        embeddings = self.dropout(embeddings)
+
+        return embeddings
+
 
 class SelfAttention_Cam(nn.module):
     def __init__(self, hidden_size, num_attention_heads, attention_dropout):
