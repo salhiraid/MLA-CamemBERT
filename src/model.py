@@ -4,6 +4,7 @@ import math
 from typing import List, Optional, Tuple, Union
 from packaging import version
 from transformers.utils import logging
+import torch.nn.functional as F
 
 # Classes to code : 
 # Embedding
@@ -17,55 +18,43 @@ from transformers.utils import logging
 # We can add the 4 classes to fine-tune the model on the 4 donwsteam tasks
 # + one class to load directly a pretrained model
 
-logger = logging.get_logger(__name__)
 
-
-class SelfAttention_Cam(nn.module):
-    def __init__(self, hidden_size, num_attention_heads, attention_dropout):
-        super(SelfAttention_Cam, self).__init__()
-        self.num_attention_heads = num_attention_heads
-        self.head_size = hidden_size // num_attention_heads
-        self.all_head_size = self.num_attention_heads * self.head_size
-
-        self.query = nn.Linear(hidden_size, self.all_head_size)
-        self.key = nn.Linear(hidden_size, self.all_head_size)
-        self.value = nn.Linear(hidden_size, self.all_head_size)
-
-        self.dropout = nn.Dropout(attention_dropout)
-
-    def transpose_for_scores(self, x):
-        new_shape = x.size()[:-1] + (self.num_attention_heads, self.head_size)
-        x = x.view(*new_shape)
-        return x.permute(0, 2, 1, 3)
-
-    def forward(self, hidden_states, attention_mask=None):
-        query_layer = self.transpose_for_scores(self.query(hidden_states))
-        key_layer = self.transpose_for_scores(self.key(hidden_states))
-        value_layer = self.transpose_for_scores(self.value(hidden_states))
-
-        attention_scores = torch.matmul(query_layer, key_layer.transpose(-1, -2)) / math.sqrt(self.head_size)
-        if attention_mask is not None:
-            attention_scores = attention_scores*attention_mask
-
-        attention_probs = nn.Softmax(dim=-1)(attention_scores)
-        attention_probs = self.dropout(attention_probs)
-
-        context_layer = torch.matmul(attention_probs, value_layer)
-        context_layer = context_layer.permute(0, 2, 1, 3).contiguous()
-        new_context_shape = context_layer.size()[:-2] + (self.all_head_size,)
-        return context_layer.view(*new_context_shape)
-    
-class CamembertSelfAttention(nn.Module):
-    def __init__(self, config, position_embedding_type=None):
+class CamembertEmbeddings(nn.Module):
+    def __init__(self, config):
         super().__init__()
-        if config.hidden_size % config.num_attention_heads != 0 and not hasattr(config, "embedding_size"):
-            raise ValueError(
-                f"The hidden size ({config.hidden_size}) is not a multiple of the number of attention "
-                f"heads ({config.num_attention_heads})"
-            )
+        self.word_embeddings = nn.Embedding(config.vocab_size, config.hidden_size, padding_idx=config.pad_token_id)
+        self.position_embeddings = nn.Embedding(config.max_position_embeddings, config.hidden_size, padding_idx=config.pad_token_id)
+        self.token_type_embeddings = nn.Embedding(config.type_vocab_size, config.hidden_size)
+        self.LayerNorm = nn.LayerNorm(config.hidden_size, eps=config.layer_norm_eps)
+        self.dropout = nn.Dropout(config.hidden_dropout_prob)
 
+        self.position_ids = torch.arange(config.max_position_embeddings).unsqueeze(0)  # Shape (1, max_position_embeddings)
+        self.token_type_ids = torch.zeros_like(self.position_ids, dtype=torch.long)  # Shape (1, max_position_embeddings)
+
+    def forward(self, input_ids, token_type_ids=None, position_ids=None):
+        input_shape = input_ids.size()
+        batch_size, seq_length = input_shape
+
+        if position_ids is None:
+            position_ids = self.position_ids[:, :seq_length].to(input_ids.device)
+        if token_type_ids is None:
+            token_type_ids = self.token_type_ids[:, :seq_length].expand(batch_size, seq_length).to(input_ids.device)
+
+        inputs_embeds = self.word_embeddings(input_ids)
+        position_embeds = self.position_embeddings(position_ids)
+        token_type_embeds = self.token_type_embeddings(token_type_ids)
+        embeddings = inputs_embeds + position_embeds + token_type_embeds
+
+        embeddings = self.LayerNorm(embeddings)
+        embeddings = self.dropout(embeddings)
+
+        return embeddings
+
+class CamembertSelfAttention(nn.Module):
+    def __init__(self, config):
+        super().__init__()
         self.num_attention_heads = config.num_attention_heads
-        self.attention_head_size = int(config.hidden_size / config.num_attention_heads)
+        self.attention_head_size = config.hidden_size // config.num_attention_heads
         self.all_head_size = self.num_attention_heads * self.attention_head_size
 
         self.query = nn.Linear(config.hidden_size, self.all_head_size)
@@ -73,175 +62,117 @@ class CamembertSelfAttention(nn.Module):
         self.value = nn.Linear(config.hidden_size, self.all_head_size)
 
         self.dropout = nn.Dropout(config.attention_probs_dropout_prob)
-        self.position_embedding_type = position_embedding_type or getattr(
-            config, "position_embedding_type", "absolute"
-        )
-        if self.position_embedding_type == "relative_key" or self.position_embedding_type == "relative_key_query":
-            self.max_position_embeddings = config.max_position_embeddings
-            self.distance_embedding = nn.Embedding(2 * config.max_position_embeddings - 1, self.attention_head_size)
 
-        # self.is_decoder = config.is_decoder
+    def transpose_for_scores(self, x):
+        batch_size, seq_length, hidden_size = x.size()
+        x = x.view(batch_size, seq_length, self.num_attention_heads, self.attention_head_size)
+        return x.permute(0, 2, 1, 3)  # [batch, num_heads, seq_len, head_size]
 
-    def transpose_for_scores(self, x: torch.Tensor) -> torch.Tensor:
-        new_x_shape = x.size()[:-1] + (self.num_attention_heads, self.attention_head_size)
-        x = x.view(new_x_shape)
-        return x.permute(0, 2, 1, 3)
-
-    def forward(
-        self,
-        hidden_states: torch.Tensor,
-        attention_mask: Optional[torch.FloatTensor] = None,
-        head_mask: Optional[torch.FloatTensor] = None,
-        encoder_hidden_states: Optional[torch.FloatTensor] = None,
-        encoder_attention_mask: Optional[torch.FloatTensor] = None,
-        past_key_value: Optional[Tuple[Tuple[torch.FloatTensor]]] = None,
-        output_attentions: Optional[bool] = False,
-    ) -> Tuple[torch.Tensor]:
-        mixed_query_layer = self.query(hidden_states)
-        is_cross_attention = encoder_hidden_states is not None
-
-        if is_cross_attention and past_key_value is not None:
-
-            key_layer = past_key_value[0]
-            value_layer = past_key_value[1]
-            attention_mask = encoder_attention_mask
-        elif is_cross_attention:
-            key_layer = self.transpose_for_scores(self.key(encoder_hidden_states))
-            value_layer = self.transpose_for_scores(self.value(encoder_hidden_states))
-            attention_mask = encoder_attention_mask
-        elif past_key_value is not None:
-            key_layer = self.transpose_for_scores(self.key(hidden_states))
-            value_layer = self.transpose_for_scores(self.value(hidden_states))
-            key_layer = torch.cat([past_key_value[0], key_layer], dim=2)
-            value_layer = torch.cat([past_key_value[1], value_layer], dim=2)
-        else:
-            key_layer = self.transpose_for_scores(self.key(hidden_states))
-            value_layer = self.transpose_for_scores(self.value(hidden_states))
-
-        query_layer = self.transpose_for_scores(mixed_query_layer)
-
-        use_cache = past_key_value is not None
-
+    def forward(self, hidden_states, attention_mask=None):
+        query_layer = self.transpose_for_scores(self.query(hidden_states))
+        key_layer = self.transpose_for_scores(self.key(hidden_states))
+        value_layer = self.transpose_for_scores(self.value(hidden_states))
 
         attention_scores = torch.matmul(query_layer, key_layer.transpose(-1, -2))
+        attention_scores /= math.sqrt(self.attention_head_size)
 
-        if self.position_embedding_type == "relative_key" or self.position_embedding_type == "relative_key_query":
-            query_length, key_length = query_layer.shape[2], key_layer.shape[2]
-            if use_cache:
-                position_ids_l = torch.tensor(key_length - 1, dtype=torch.long, device=hidden_states.device).view(
-                    -1, 1
-                )
-            else:
-                position_ids_l = torch.arange(query_length, dtype=torch.long, device=hidden_states.device).view(-1, 1)
-            position_ids_r = torch.arange(key_length, dtype=torch.long, device=hidden_states.device).view(1, -1)
-            distance = position_ids_l - position_ids_r
-
-            positional_embedding = self.distance_embedding(distance + self.max_position_embeddings - 1)
-            positional_embedding = positional_embedding.to(dtype=query_layer.dtype) 
-
-            if self.position_embedding_type == "relative_key":
-                relative_position_scores = torch.einsum("bhld,lrd->bhlr", query_layer, positional_embedding)
-                attention_scores = attention_scores + relative_position_scores
-            elif self.position_embedding_type == "relative_key_query":
-                relative_position_scores_query = torch.einsum("bhld,lrd->bhlr", query_layer, positional_embedding)
-                relative_position_scores_key = torch.einsum("bhrd,lrd->bhlr", key_layer, positional_embedding)
-                attention_scores = attention_scores + relative_position_scores_query + relative_position_scores_key
-
-        attention_scores = attention_scores / math.sqrt(self.attention_head_size)
         if attention_mask is not None:
-            attention_scores = attention_scores + attention_mask
+            attention_mask = attention_mask.unsqueeze(1).unsqueeze(2)  # [batch, 1, 1, seq_len]
+            attention_scores += attention_mask
 
         attention_probs = nn.functional.softmax(attention_scores, dim=-1)
         attention_probs = self.dropout(attention_probs)
 
-        # Mask heads if we want to
-        if head_mask is not None:
-            attention_probs = attention_probs * head_mask
-
         context_layer = torch.matmul(attention_probs, value_layer)
-
         context_layer = context_layer.permute(0, 2, 1, 3).contiguous()
-        new_context_layer_shape = context_layer.size()[:-2] + (self.all_head_size,)
-        context_layer = context_layer.view(new_context_layer_shape)
+        context_layer = context_layer.view(hidden_states.size(0), -1, self.all_head_size)
 
-        outputs = (context_layer, attention_probs) if output_attentions else (context_layer,)
+        return context_layer
 
-        return outputs
+class CamembertFeedForward(nn.Module):
+    def __init__(self, config):
+        super().__init__()
+        self.dense_1 = nn.Linear(config.hidden_size, config.hidden_size)
+        self.layer_norm = nn.LayerNorm(config.hidden_size, eps=config.layer_norm_eps)
+        self.dropout1 = nn.Dropout(config.hidden_dropout_prob)
+        self.dense_2 = nn.Linear(config.hidden_size, config.intermediate_size)
+        self.activation = nn.GELU()
+        self.dense_3 = nn.Linear(config.intermediate_size, config.hidden_size)
+        self.dropout2 = nn.Dropout(config.hidden_dropout_prob)
 
-class CamembertSdpaSelfAttention(CamembertSelfAttention):
-    def __init__(self, config, position_embedding_type=None):
-        super().__init__(config, position_embedding_type=position_embedding_type)
-        self.dropout_prob = config.attention_probs_dropout_prob
-        #self.require_contiguous_qkv = version.parse(get_torch_version()) < version.parse("2.2.0")
+    def forward(self, x):
+        x = self.dense_1(x)
+        x = self.layer_norm(x)
+        x - self.dropout1(x)
+        x = self.dense_2(x)
+        x = self.activation(x)
+        x = self.dense_3(x)
+        x = self.layer_norm(x)
+        x = self.dropout2(x)
+        
+        return self.dropout(x)
 
-    # Adapted from CamembertSelfAttention
-    def forward(
-        self,
-        hidden_states: torch.Tensor,
-        attention_mask: Optional[torch.Tensor] = None,
-        head_mask: Optional[torch.FloatTensor] = None,
-        encoder_hidden_states: Optional[torch.FloatTensor] = None,
-        encoder_attention_mask: Optional[torch.FloatTensor] = None,
-        past_key_value: Optional[Tuple[Tuple[torch.FloatTensor]]] = None,
-        output_attentions: Optional[bool] = False,
-    ) -> Tuple[torch.Tensor]:
-        if self.position_embedding_type != "absolute" or output_attentions or head_mask is not None:
-            # TODO: Improve this warning with e.g. `model.config._attn_implementation = "manual"` once implemented.
-            logger.warning_once(
-                "CamembertSdpaSelfAttention is used but `torch.nn.functional.scaled_dot_product_attention` does not support "
-                "non-absolute `position_embedding_type` or `output_attentions=True` or `head_mask`. Falling back to "
-                "the manual attention implementation, but specifying the manual implementation will be required from "
-                "Transformers version v5.0.0 onwards. This warning can be removed using the argument "
-                '`attn_implementation="eager"` when loading the model.'
-            )
-            return super().forward(
-                hidden_states,
-                attention_mask,
-                head_mask,
-                encoder_hidden_states,
-                encoder_attention_mask,
-                past_key_value,
-                output_attentions,
-            )
+class CamembertLayer(nn.Module):
+    def __init__(self, config):
+        super().__init__()
+        self.attention = CamembertSelfAttention(config)
+        self.attention_norm = nn.LayerNorm(config.hidden_size, eps=config.layer_norm_eps)
+        self.feed_forward = CamembertFeedForward(config)
+        self.feed_forward_norm = nn.LayerNorm(config.hidden_size, eps=config.layer_norm_eps)
 
-        bsz, tgt_len, _ = hidden_states.size()
+    def forward(self, hidden_states, attention_mask=None):
+        # Self-Attention with skip connection
+        attention_output = self.attention(hidden_states, attention_mask)
+        attention_output = self.attention_norm(hidden_states + attention_output)  # Skip connection
 
-        query_layer = self.transpose_for_scores(self.query(hidden_states))
-        is_cross_attention = encoder_hidden_states is not None
+        # Feed-Forward with skip connection
+        feed_forward_output = self.feed_forward(attention_output)
+        layer_output = self.feed_forward_norm(attention_output + feed_forward_output)  # Skip connection
 
-        current_states = encoder_hidden_states if is_cross_attention else hidden_states
-        attention_mask = encoder_attention_mask if is_cross_attention else attention_mask
+        return layer_output
 
-        if is_cross_attention and past_key_value and past_key_value[0].shape[2] == current_states.shape[1]:
-            key_layer, value_layer = past_key_value
+class CamembertEncoder(nn.Module):
+    def __init__(self, config):
+        super().__init__()
+        self.layers = nn.ModuleList([CamembertLayer(config) for _ in range(config.num_hidden_layers)])
+
+    def forward(self, hidden_states, attention_mask=None):
+        for layer in self.layers:
+            hidden_states = layer(hidden_states, attention_mask)
+        return hidden_states
+    
+class CamembertModel(nn.Module):
+    def __init__(self, config):
+        super().__init__()
+        self.config = config
+        self.embeddings = CamembertEmbeddings(config)  
+        self.encoder = CamembertEncoder(config)  
+        if config.head_type == "MLM":
+            self.head = CamembertLMHead(config)
         else:
-            key_layer = self.transpose_for_scores(self.key(current_states))
-            value_layer = self.transpose_for_scores(self.value(current_states))
-            if past_key_value is not None and not is_cross_attention:
-                key_layer = torch.cat([past_key_value[0], key_layer], dim=2)
-                value_layer = torch.cat([past_key_value[1], value_layer], dim=2)
+            raise ValueError(f"Head type {config.head_type} not supported")
+    def forward(self, input_ids, attention_mask=None):
+        embedded_input = self.embeddings(input_ids)
+        if attention_mask is not None:
+            # attention_mask = (1.0 - attention_mask) * -10000.0  
+            attention_mask = (1.0 - attention_mask) * -float('inf')
 
-        if self.require_contiguous_qkv and query_layer.device.type == "cuda" and attention_mask is not None:
-            query_layer = query_layer.contiguous()
-            key_layer = key_layer.contiguous()
-            value_layer = value_layer.contiguous()
+        encoder_output = self.encoder(embedded_input, attention_mask)
+        logits = self.head(encoder_output)
+        return logits
 
-        is_causal = (
-            True if self.is_decoder and not is_cross_attention and attention_mask is None and tgt_len > 1 else False
-        )
 
-        attn_output = torch.nn.functional.scaled_dot_product_attention(
-            query_layer,
-            key_layer,
-            value_layer,
-            attn_mask=attention_mask,
-            dropout_p=self.dropout_prob if self.training else 0.0,
-            is_causal=is_causal,
-        )
+class CamembertLMHead(nn.Module):
+    def __init__(self, config):
+        super().__init__()
+        self.dense = nn.Linear(config.hidden_size, config.hidden_size)
+        self.layer_norm = nn.LayerNorm(config.hidden_size, eps=config.layer_norm_eps)
+        self.decoder = nn.Linear(config.hidden_size, config.vocab_size, bias=True)
 
-        attn_output = attn_output.transpose(1, 2)
-        attn_output = attn_output.reshape(bsz, tgt_len, self.all_head_size)
+    def forward(self, hidden_states):
+        hidden_states = self.dense(hidden_states)
+        hidden_states = F.gelu(hidden_states)
+        hidden_states = self.layer_norm(hidden_states)
+        logits = self.decoder(hidden_states)
+        return logits
 
-        outputs = (attn_output,)
-
-        return outputs
