@@ -4,6 +4,7 @@ import math
 from typing import List, Optional, Tuple, Union
 from packaging import version
 from transformers.utils import logging
+import torch.nn.functional as F
 
 # Classes to code : 
 # Embedding
@@ -17,7 +18,6 @@ from transformers.utils import logging
 # We can add the 4 classes to fine-tune the model on the 4 donwsteam tasks
 # + one class to load directly a pretrained model
 
-logger = logging.get_logger(__name__)
 
 class CamembertEmbeddings(nn.Module):
     def __init__(self, config):
@@ -50,7 +50,6 @@ class CamembertEmbeddings(nn.Module):
 
         return embeddings
 
-
 class CamembertSelfAttention(nn.Module):
     def __init__(self, config):
         super().__init__()
@@ -70,25 +69,20 @@ class CamembertSelfAttention(nn.Module):
         return x.permute(0, 2, 1, 3)  # [batch, num_heads, seq_len, head_size]
 
     def forward(self, hidden_states, attention_mask=None):
-        # Linear projections
         query_layer = self.transpose_for_scores(self.query(hidden_states))
         key_layer = self.transpose_for_scores(self.key(hidden_states))
         value_layer = self.transpose_for_scores(self.value(hidden_states))
 
-        # Compute attention scores
         attention_scores = torch.matmul(query_layer, key_layer.transpose(-1, -2))
         attention_scores /= math.sqrt(self.attention_head_size)
 
-        # Apply attention mask (broadcast to match attention_scores shape)
         if attention_mask is not None:
             attention_mask = attention_mask.unsqueeze(1).unsqueeze(2)  # [batch, 1, 1, seq_len]
             attention_scores += attention_mask
 
-        # Normalize attention scores to probabilities
         attention_probs = nn.functional.softmax(attention_scores, dim=-1)
         attention_probs = self.dropout(attention_probs)
 
-        # Weighted sum of value vectors
         context_layer = torch.matmul(attention_probs, value_layer)
         context_layer = context_layer.permute(0, 2, 1, 3).contiguous()
         context_layer = context_layer.view(hidden_states.size(0), -1, self.all_head_size)
@@ -98,15 +92,24 @@ class CamembertSelfAttention(nn.Module):
 class CamembertFeedForward(nn.Module):
     def __init__(self, config):
         super().__init__()
-        self.dense_1 = nn.Linear(config.hidden_size, config.intermediate_size)
-        self.activation = nn.ReLU()  # Simpler activation for beginners
-        self.dense_2 = nn.Linear(config.intermediate_size, config.hidden_size)
-        self.dropout = nn.Dropout(config.hidden_dropout_prob)
+        self.dense_1 = nn.Linear(config.hidden_size, config.hidden_size)
+        self.layer_norm = nn.LayerNorm(config.hidden_size, eps=config.layer_norm_eps)
+        self.dropout1 = nn.Dropout(config.hidden_dropout_prob)
+        self.dense_2 = nn.Linear(config.hidden_size, config.intermediate_size)
+        self.activation = nn.GELU()
+        self.dense_3 = nn.Linear(config.intermediate_size, config.hidden_size)
+        self.dropout2 = nn.Dropout(config.hidden_dropout_prob)
 
     def forward(self, x):
         x = self.dense_1(x)
-        x = self.activation(x)
+        x = self.layer_norm(x)
+        x - self.dropout1(x)
         x = self.dense_2(x)
+        x = self.activation(x)
+        x = self.dense_3(x)
+        x = self.layer_norm(x)
+        x = self.dropout2(x)
+        
         return self.dropout(x)
 
 class CamembertLayer(nn.Module):
@@ -141,19 +144,35 @@ class CamembertEncoder(nn.Module):
 class CamembertModel(nn.Module):
     def __init__(self, config):
         super().__init__()
-        self.embeddings = CamembertEmbeddings(config)  # Ensure it includes word, position, and type embeddings
-        self.encoder = CamembertEncoder(config)  # Ensure num_hidden_layers matches config
-
+        self.config = config
+        self.embeddings = CamembertEmbeddings(config)  
+        self.encoder = CamembertEncoder(config)  
+        if config.head_type == "MLM":
+            self.head = CamembertLMHead(config)
+        else:
+            raise ValueError(f"Head type {config.head_type} not supported")
     def forward(self, input_ids, attention_mask=None):
-        # Embedding layer
         embedded_input = self.embeddings(input_ids)
-
-        # Attention mask preparation
         if attention_mask is not None:
-            # attention_mask = (1.0 - attention_mask) * -10000.0  # Convert to large negative values for masked positions
+            # attention_mask = (1.0 - attention_mask) * -10000.0  
             attention_mask = (1.0 - attention_mask) * -float('inf')
 
-
-        # Encoder
         encoder_output = self.encoder(embedded_input, attention_mask)
-        return encoder_output
+        logits = self.head(encoder_output)
+        return logits
+
+
+class CamembertLMHead(nn.Module):
+    def __init__(self, config):
+        super().__init__()
+        self.dense = nn.Linear(config.hidden_size, config.hidden_size)
+        self.layer_norm = nn.LayerNorm(config.hidden_size, eps=config.layer_norm_eps)
+        self.decoder = nn.Linear(config.hidden_size, config.vocab_size, bias=True)
+
+    def forward(self, hidden_states):
+        hidden_states = self.dense(hidden_states)
+        hidden_states = F.gelu(hidden_states)
+        hidden_states = self.layer_norm(hidden_states)
+        logits = self.decoder(hidden_states)
+        return logits
+
