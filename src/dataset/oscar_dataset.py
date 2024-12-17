@@ -1,10 +1,8 @@
 import torch
-from torch.utils.data import Dataset, DataLoader
-from transformers import CamembertTokenizer
-from datasets import load_dataset, load_from_disk
-
+from torch.utils.data import Dataset
 
 class OscarDataset(Dataset):
+    
     """
     Wraps Hugging Face dataset into a PyTorch Dataset.
     """
@@ -28,35 +26,34 @@ class OscarDataset(Dataset):
         :return: Number of examples in the dataset
         """
         return len(self.dataset)
-
-    def __getitem__(self, idx):
-        """
-        Returns an item from the dataset.
-        :param idx: Index of the item
-        :return: Raw text at the specified index
-        """
-        assert idx < len(self.dataset), "Index out of range"
-        text = self.dataset[idx]['text']
-        tokens = self.tokenizer(
-            text,
-            padding="max_length",
-            truncation=True,
-            #max_length=512,
-            return_tensors="pt"
-        )
-        if self.return_tokens :
-            return{
-                "input_ids": tokens["input_ids"].squeeze(0),  # Tensor 1D
-                "attention_mask": tokens["attention_mask"].squeeze(0),  # Tensor 1D
-                "tokens" : self.tokenizer.tokenize(text),
-                "text" : text
-            }        
-        else :
-            return{
-                "input_ids": tokens["input_ids"].squeeze(0),  # Tensor 1D
-                "attention_mask": tokens["attention_mask"].squeeze(0),  # Tensor 1D
-                    }
         
+    # def __getitem__(self, idx):
+    #     """
+    #     Returns an item from the dataset.
+    #     :param idx: Index of the item
+    #     :return: Raw text at the specified index
+    #     """
+    #     assert idx < len(self.dataset), "Index out of range"
+    #     text = self.dataset[idx]['text']
+    #     tokens = self.tokenizer(
+    #         text,
+    #         padding="max_length",
+    #         truncation=True,
+    #         #max_length=512,
+    #         return_tensors="pt"
+    #     )
+    #     if self.return_tokens :
+    #         return{
+    #             "input_ids": tokens["input_ids"].squeeze(0),  # Tensor 1D
+    #             "attention_mask": tokens["attention_mask"].squeeze(0),  # Tensor 1D
+    #             "tokens" : self.tokenizer.tokenize(text),
+    #             "text" : text
+    #         }        
+    #     else :
+    #         return{
+    #             "input_ids": tokens["input_ids"].squeeze(0),  # Tensor 1D
+    #             "attention_mask": tokens["attention_mask"].squeeze(0),  # Tensor 1D
+    #                 }
         
     def __getitem__(self, idx):
         """
@@ -90,7 +87,6 @@ class OscarDataset(Dataset):
                 "masked_input_ids": masked_input_ids["input_ids"].squeeze(0),  # Tensor 1D
                 "attention_mask": tokens["attention_mask"].squeeze(0),  # Tensor 1D
                     }
-
 
         
     def dynamic_masking(self, input_ids, attention_mask):

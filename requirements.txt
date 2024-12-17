@@ -6,3 +6,5 @@ datasets
 transformers
 datasets
 dataclasses
+d2l
+torchinfo
