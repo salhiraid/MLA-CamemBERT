@@ -101,4 +101,94 @@ class NLIFinetuningModel(nn.Module):
 
         return {"logits": logits, "loss": loss}
     
+import pytorch_lightning as pl
+from torchmetrics import Accuracy
 
+class NLI(pl.LightningModule):
+    def __init__(self, 
+                 model: NLIFinetuningModel, 
+                 lr: float = 5e-5, 
+                 warmup_steps: int = 0, 
+                 total_steps: int = 10000):
+        """
+        Initialize the NLI model.
+        :param model: Instance of the NLIFinetuningModel.
+        """
+        super(NLI, self).__init__()
+        self.model = model
+        self.lr = lr
+        self.warmup_steps = warmup_steps
+        self.total_steps = total_steps
+
+        # Metrics
+        self.train_acc = Accuracy()
+        self.val_acc = Accuracy()
+        self.loss_fn = torch.nn.CrossEntropyLoss()
+
+    def training_step(self, batch, batch_index):
+        """
+        Training step for the model.
+        """
+        input_ids, attention_mask, labels = batch
+        outputs = self.model(input_ids, attention_mask, labels)
+        loss = outputs["loss"]
+
+        # Compute accuracy
+        logits = outputs["logits"]
+        preds = torch.argmax(logits, dim=1)
+        self.train_acc(preds, labels)
+
+        # Log metrics
+        self.log('train_loss', loss, prog_bar=True, on_step=False, on_epoch=True)
+        self.log('train_acc', self.train_acc, prog_bar=True, on_step=False, on_epoch=True)
+
+        return loss
+
+    def validation_step(self, batch, idx):
+        """
+        Validation step for the model.
+        """
+        input_ids, attention_mask, labels = batch
+        outputs = self.model(input_ids, attention_mask, labels)
+        loss = outputs["loss"]
+
+        # Compute accuracy
+        logits = outputs["logits"]
+        preds = torch.argmax(logits, dim=1)
+        self.val_acc(preds, labels)
+
+        # Log loss
+        self.log('val_loss', loss, prog_bar=True, on_step=False, on_epoch=True)
+        return loss
+    
+    
+    def on_validation_epoch_end(self):
+        """
+        Aggregate metrics at the end of each validation epoch.
+        """
+        # Log global validation accuracy
+        self.log('val_accuracy', self.val_acc.compute(), prog_bar=True)
+        self.val_acc.reset()  # Reset accuracy for the next epoch
+
+
+    def configure_optimizers(self):
+        """
+        Configure optimizer and learning rate scheduler.
+        """
+        optimizer = torch.optim.AdamW(self.parameters(), lr=self.lr)
+        scheduler = torch.optim.lr_scheduler.OneCycleLR(
+            optimizer, 
+            max_lr=self.lr, 
+            total_steps=self.total_steps, 
+            pct_start=0.1, 
+            anneal_strategy='linear'
+        )
+        return {"optimizer": optimizer, "lr_scheduler": {"scheduler": scheduler, "interval": "step", "frequency": 1}}
+
+    def forward(self, batch):
+        """
+        Forward pass for inference.
+        """
+        input_ids, attention_mask, _ = batch
+        outputs = self.model(input_ids, attention_mask)
+        return outputs["logits"]

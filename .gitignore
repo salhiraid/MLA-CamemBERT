@@ -2,3 +2,5 @@ CamemBERT_/
 data/
 doc.md/
 models/
+.env
+notebooks/nli_train\nli/lightning_logs/
