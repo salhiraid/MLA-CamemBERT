@@ -151,15 +151,23 @@ class CamembertModel(nn.Module):
             self.head = CamembertLMHead(config)
         else:
             raise ValueError(f"Head type {config.head_type} not supported")
-    def forward(self, input_ids, attention_mask=None):
+    
+    def forward(self, input_ids, attention_mask=None, labels=None):
+        # Embedding layer
         embedded_input = self.embeddings(input_ids)
+
         if attention_mask is not None:
-            # attention_mask = (1.0 - attention_mask) * -10000.0  
             attention_mask = (1.0 - attention_mask) * -float('inf')
 
         encoder_output = self.encoder(embedded_input, attention_mask)
         logits = self.head(encoder_output)
-        return logits
+
+        loss = None
+        if labels is not None:
+            loss_fn = nn.CrossEntropyLoss(ignore_index=-100)  
+            loss = loss_fn(logits.view(-1, logits.size(-1)), labels.view(-1))
+
+        return (loss, logits) if labels is not None else logits
 
 
 class CamembertLMHead(nn.Module):
