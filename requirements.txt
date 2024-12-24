@@ -8,3 +8,4 @@ datasets
 dataclasses
 torchinfo
 tensorboard
+ipykernel
