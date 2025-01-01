@@ -34,20 +34,65 @@ class CamembertEmbeddings(nn.Module):
     def forward(self, input_ids, token_type_ids=None, position_ids=None):
         input_shape = input_ids.size()
         batch_size, seq_length = input_shape
-
+    
         if position_ids is None:
             position_ids = self.position_ids[:, :seq_length].to(input_ids.device)
         if token_type_ids is None:
             token_type_ids = self.token_type_ids[:, :seq_length].expand(batch_size, seq_length).to(input_ids.device)
-
+    
+        # Embed tokens, positions, and token types
         inputs_embeds = self.word_embeddings(input_ids)
         position_embeds = self.position_embeddings(position_ids)
-        token_type_embeds = self.token_type_embeddings(token_type_ids)
-        embeddings = inputs_embeds + position_embeds + token_type_embeds
+        print("input_ids shape:", input_ids.shape)
+        print("input_ids min:", input_ids.min().item())
+        print("input_ids max:", input_ids.max().item())
+        print("embedding vocab size:", self.embeddings.num_embeddings)
 
+        # Expand position embeddings to match batch size
+        position_embeds = position_embeds.expand(batch_size, -1, -1)
+    
+        token_type_embeds = self.token_type_embeddings(token_type_ids)
+        print("inputs_embeds:", inputs_embeds.shape)
+        print("position_embeds:", position_embeds.shape)
+        print("token_type_embeds:", token_type_embeds.shape)
+        print("inputs_embeds device:", inputs_embeds.device)
+        print("position_embeds device:", position_embeds.device)
+        print("token_type_embeds device:", token_type_embeds.device)
+        print("inputs_embeds dtype:", inputs_embeds.dtype)
+        print("position_embeds dtype:", position_embeds.dtype)
+        print("token_type_embeds dtype:", token_type_embeds.dtype)
+        print("inputs_embeds has Inf:", torch.isinf(inputs_embeds).any())
+        
+        print("position_embeds has NaN:", torch.isnan(position_embeds).any())
+        print("position_embeds has Inf:", torch.isinf(position_embeds).any())
+        
+        print("token_type_embeds has NaN:", torch.isnan(token_type_embeds).any())
+        print("token_type_embeds has Inf:", torch.isinf(token_type_embeds).any())
+        print("inputs_embeds has NaN:", torch.isnan(inputs_embeds).any().item())
+        print("inputs_embeds has Inf:", torch.isinf(inputs_embeds).any().item())
+        
+        print("position_embeds has NaN:", torch.isnan(position_embeds).any().item())
+        print("position_embeds has Inf:", torch.isinf(position_embeds).any().item())
+        
+        print("token_type_embeds has NaN:", torch.isnan(token_type_embeds).any().item())
+        print("token_type_embeds has Inf:", torch.isinf(token_type_embeds).any().item())
+        print("input_ids range:", input_ids.min().item(), input_ids.max().item())
+        print("token_type_ids range:", token_type_ids.min().item(), token_type_ids.max().item())
+        print("position_ids range:", position_ids.min().item(), position_ids.max().item())
+        print("Embedding weights stats:")
+        print("word_embeddings mean:", self.word_embeddings.weight.mean().item())
+        print("position_embeddings mean:", self.position_embeddings.weight.mean().item())
+        print("token_type_embeddings mean:", self.token_type_embeddings.weight.mean().item())
+
+
+
+
+        embeddings = inputs_embeds + position_embeds 
+        embeddings =+ token_type_embeds
+    
         embeddings = self.LayerNorm(embeddings)
         embeddings = self.dropout(embeddings)
-
+    
         return embeddings
 
 class CamembertSelfAttention(nn.Module):
