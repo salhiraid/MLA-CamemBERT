@@ -6,3 +6,6 @@ datasets
 transformers
 datasets
 dataclasses
+torchinfo
+tensorboard
+ipykernel
