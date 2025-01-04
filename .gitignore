@@ -1,9 +1,14 @@
 # Customised 
-CamemBERT_/
+CamemBERT_plus/
 data/
 doc.md/
 models/
 notebooks/nli_train\nli/lightning_logs/
+notebooks/trainings/liens.md
+notebooks/trainings/to_do.md
+notebooks/trainings/nli_train/lightning_logs/
+notebooks/trainings/nli_train/my_logs/
+notebooks/trainings/nli_train/prepare_nli_model.ipynb
 
 # Editors
 .vscode/
@@ -130,3 +135,4 @@ venv.bak/
 .mypy_cache/
 .dmypy.json
 dmypy.json
+.codegpt
