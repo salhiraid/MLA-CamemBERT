@@ -1,10 +1,8 @@
 import torch
-from torch.utils.data import Dataset, DataLoader
-from transformers import CamembertTokenizer
-from datasets import load_dataset, load_from_disk
-
+from torch.utils.data import Dataset
 
 class OscarDataset(Dataset):
+    
     """
     Wraps Hugging Face dataset into a PyTorch Dataset.
     """

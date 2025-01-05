@@ -1,5 +1,4 @@
-from datasets import load_dataset
-from torch.utils.data import Dataset, DataLoader
+from torch.utils.data import DataLoader
 from transformers import CamembertTokenizer
 from datasets import load_from_disk
 
@@ -12,7 +11,6 @@ hf_dataset = load_from_disk(dataset_path)
 
 tokenizer = CamembertTokenizer.from_pretrained("camembert-base")
 torch_dataset = OscarDataset(hf_dataset, tokenizer)
-
 dataloader = DataLoader(torch_dataset, batch_size=16)
 
 for i, batch in enumerate(dataloader):
