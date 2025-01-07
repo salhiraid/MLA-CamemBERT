@@ -100,4 +100,3 @@ class OscarDataset(Dataset):
                 "input_ids": tokens["input_ids"].squeeze(0),  # Tensor 1D
                 "attention_mask": tokens["attention_mask"].squeeze(0),  # Tensor 1D
                     }
-            
