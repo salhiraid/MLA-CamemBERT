@@ -9,6 +9,8 @@ notebooks/trainings/to_do.md
 notebooks/trainings/nli_train/lightning_logs/
 notebooks/trainings/nli_train/my_logs/
 notebooks/trainings/nli_train/prepare_nli_model.ipynb
+notebooks/trainings/nli_train/nli-finetuning-gpu.ipynb
+notebooks/trainings/nli_train/nli-finetuning.ipynb
 
 # Editors
 .vscode/
