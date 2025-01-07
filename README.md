@@ -1,6 +1,6 @@
 # MLA-CamemBERT
 
-**MLA-CamemBERT** is a project aimed at reproducing and adapting the **CamemBERT** model, a French-optimized version of RoBERTa. This project explores techniques to avoid expensive pre-training while maintaining high performance using approaches like **FOCUS** and fine-tuning on specific tasks.
+**MLA-CamemBERT** is a project aimed at reproducing and adapting the **CamemBERT** model, a French-optimized version of RoBERTa.
 
 ---
 
@@ -28,7 +28,19 @@ The model is designed to be efficient to train and easily integratable into NLP 
 
 2. Create a virtual environment and install dependencies:
 
-```bash
-python -m venv env
-source env/bin/activate  # On Windows, use `env\Scripts\activate`
-pip install -r requirements.txt
+    ```bash
+    python -m venv env
+    source env/bin/activate  # On Windows, use `env\Scripts\activate`
+    pip install -r requirements.txt
+
+
+🚀 Usage
+1. Data Preprocessing
+The script datasets.py handles loading and preparing data for training. Make sure your datasets are properly formatted.
+
+2. Training
+Run the training process using the notebooks in the notebooks/ directory or via the source scripts in src/:
+
+    ```bash
+    Copy code
+    python src/train.py
