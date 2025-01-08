@@ -24,7 +24,7 @@ class NERDataset(Dataset):
             label_ids = []
             for word_idx in word_ids:
                 if word_idx is None:
-                    label_ids.append(-100)  # Special tokens
+                    label_ids.append(-100)  
                 elif word_idx != previous_word_idx:
                     label_ids.append(label[word_idx])
                 else:
