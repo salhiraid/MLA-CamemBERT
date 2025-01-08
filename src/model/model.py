@@ -1,8 +1,24 @@
 import torch
 import torch.nn as nn
-import math
 import torch.nn.functional as F
-from config import CamembertConfig
+import math
+
+class CamembertConfig:
+    def __init__(self):
+        self.vocab_size = 32005
+        self.hidden_size = 768
+        self.num_hidden_layers = 12
+        self.num_attention_heads = 12
+        self.intermediate_size = 3072
+        self.hidden_act = "gelu"
+        self.hidden_dropout_prob = 0.1
+        self.attention_probs_dropout_prob = 0.1
+        self.max_position_embeddings = 514
+        self.type_vocab_size = 1
+        self.initializer_range = 0.02
+        self.layer_norm_eps = 1e-5
+        self.pad_token_id = 1
+        self.head_type = "MLM"
 
 class CamembertEmbeddings(nn.Module):
     def __init__(self, config):
@@ -10,7 +26,7 @@ class CamembertEmbeddings(nn.Module):
         self.word_embeddings = nn.Embedding(config.vocab_size, config.hidden_size, padding_idx=config.pad_token_id)
         self.position_embeddings = nn.Embedding(config.max_position_embeddings, config.hidden_size)
         self.token_type_embeddings = nn.Embedding(config.type_vocab_size, config.hidden_size)
-        self.LayerNorm = nn.LayeNorm(config.hidden_size, eps=config.layer_norm_eps)
+        self.LayerNorm = nn.LayerNorm(config.hidden_size, eps=config.layer_norm_eps)
         self.dropout = nn.Dropout(config.hidden_dropout_prob)
 
     def forward(self, input_ids, token_type_ids=None, position_ids=None):
@@ -101,10 +117,6 @@ class CamembertFeedForward(nn.Module):
         output = self.dropout(output)
         output = self.LayerNorm(output + hidden_states)
 
-        # Debug intermediate and final outputs
-        # print(f"Intermediate Output NaN: {torch.isnan(intermediate_output).any()}")
-        # print(f"Final Output NaN: {torch.isnan(output).any()}")
-
         return output
 
 
@@ -146,14 +158,12 @@ class CamembertLMHead(nn.Module):
         hidden_states = self.layer_norm(hidden_states)
         logits = self.decoder(hidden_states)
 
-        # Debug prints
-        # print(f"Logits NaN: {torch.isnan(logits).any()}")
-
         return logits
 
 class CamembertModel(nn.Module):
     def __init__(self, config):
         super().__init__()
+        self.config = config
         self.embeddings = CamembertEmbeddings(config)
         self.encoder = CamembertEncoder(config)
         self.head = CamembertLMHead(config) if config.head_type == "MLM" else None
