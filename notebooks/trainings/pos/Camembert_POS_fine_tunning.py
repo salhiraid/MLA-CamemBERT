@@ -15,11 +15,12 @@ import os
 ############################################################################
 # 1) Load the UD French Sequoia dataset
 ############################################################################
-dataset = load_dataset(
-    "universal_dependencies",
-    "fr_spoken",
-    trust_remote_code=True
-)
+fr_gsd=load_dataset("universal_dependencies", "fr_gsd", trust_remote_code=True)
+fr_spoken=load_dataset("universal_dependencies", "fr_spoken", trust_remote_code=True)
+fr_partut=load_dataset("universal_dependencies", "fr_partut", trust_remote_code=True)
+fr_sequoia=load_dataset("universal_dependencies", "fr_sequoia", trust_remote_code=True)
+
+dataset = fr_sequoia
 
 print("Dataset splits:\n", dataset)  # train, validation, test
 
@@ -42,7 +43,7 @@ print("Number of distinct UPOS labels:", num_labels)
 tokenizer = AutoTokenizer.from_pretrained("camembert-base")
 
 ############################################################################
-# 4) Tokenize and align labels function (manual, batched version)
+# 4) Tokenize and align labels function 
 ############################################################################
 def tokenize_and_align_labels(examples):
     """
@@ -87,9 +88,6 @@ tokenized_dataset.set_format(
     columns=["input_ids", "attention_mask", "labels"]
 )
 
-print("\nSample tokenized entry from train set:")
-print(tokenized_dataset["train"][0])
-
 ############################################################################
 # 7) Define the model, set readable label mappings
 ############################################################################
@@ -99,7 +97,7 @@ model = CamembertForTokenClassification.from_pretrained(
 )
 model.config.id2label = id2label
 model.config.label2id = label2id
-
+# 
 ############################################################################
 # 8) Create DataLoaders (batching) for train, validation, and test
 ############################################################################
@@ -147,7 +145,6 @@ model.to(device)
 
 ############################################################################
 # 10) Training Loop with validation accuracy
-#     We'll record train_loss, val_loss, val_accuracy each epoch
 ############################################################################
 train_losses = []
 val_losses   = []
@@ -200,7 +197,6 @@ for epoch in range(num_epochs):
             preds = logits.argmax(dim=-1)
             labels = batch["labels"]
 
-            # Only consider positions where label != -100
             mask = labels != -100
             val_correct += (preds[mask] == labels[mask]).sum().item()
             val_total   += mask.sum().item()
@@ -250,15 +246,14 @@ print(f"\nFinal Test Loss: {avg_test_loss:.4f} | Test Accuracy: {test_accuracy:.
 save_directory = "./my_camembert_pos_model_fr_ftb"
 os.makedirs(save_directory, exist_ok=True)
 
-model.save_pretrained(save_directory)    # saves config + weights
-tokenizer.save_pretrained(save_directory)  # saves the tokenizer files
+model.save_pretrained(save_directory)    
+tokenizer.save_pretrained(save_directory) 
 
 print(f"\nModel and tokenizer saved to: {save_directory}")
 
 ############################################################################
 # 13) Plot Training & Validation Loss
 ############################################################################
-# We'll use matplotlib to plot the losses across epochs.
 epochs_range = range(1, num_epochs + 1)
 
 plt.figure(figsize=(8, 6))
@@ -269,16 +264,15 @@ plt.xlabel("Epoch")
 plt.ylabel("Loss")
 plt.legend()
 plt.grid(True)
-plt.savefig("loss_plot.png")  # Save the figure to a file
+plt.savefig("loss_plot.png")  
 plt.show()
 
-# Optionally, you can plot validation accuracy as well:
 plt.figure(figsize=(8, 6))
 plt.plot(epochs_range, val_accuracies, label='Val Accuracy', marker='o', color='green')
 plt.title("Validation Accuracy per Epoch")
 plt.xlabel("Epoch")
 plt.ylabel("Accuracy")
-plt.ylim([0, 1])  # accuracy goes from 0 to 1
+plt.ylim([0, 1])  
 plt.grid(True)
 plt.legend()
 plt.savefig("accuracy_plot.png")
