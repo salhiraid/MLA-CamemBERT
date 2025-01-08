@@ -32,6 +32,7 @@ The model is designed to be efficient to train and easily integratable into NLP 
   python -m venv env
   source env/bin/activate  # On Windows, use `env\Scripts\activate`
   pip install -r requirements.txt
+  ```
 
 3. 🚀 Usage
 Data Preprocessing
