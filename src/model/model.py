@@ -117,10 +117,6 @@ class CamembertFeedForward(nn.Module):
         output = self.dropout(output)
         output = self.LayerNorm(output + hidden_states)
 
-        # Debug intermediate and final outputs
-        # print(f"Intermediate Output NaN: {torch.isnan(intermediate_output).any()}")
-        # print(f"Final Output NaN: {torch.isnan(output).any()}")
-
         return output
 
 
@@ -161,9 +157,6 @@ class CamembertLMHead(nn.Module):
         hidden_states = F.gelu(self.dense(hidden_states))
         hidden_states = self.layer_norm(hidden_states)
         logits = self.decoder(hidden_states)
-
-        # Debug prints
-        # print(f"Logits NaN: {torch.isnan(logits).any()}")
 
         return logits
 
