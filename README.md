@@ -33,36 +33,36 @@ The model is designed to be efficient to train and easily integratable into NLP 
   source env/bin/activate  # On Windows, use `env\Scripts\activate`
   pip install -r requirements.txt
 
-  🚀 Usage
+3. 🚀 Usage
 Data Preprocessing
 Use the datasets.py script to handle loading and preparing data for training. Ensure that your datasets are correctly formatted before proceeding:
 
   python src/datasets.py
 
-3. Training
+4. Training
 All training processes are conducted using Jupyter notebooks located in the notebooks/ directory. You can run the notebooks to train the model from scratch or fine-tune it on specific downstream tasks. 
 
-4. Model Implementation
+5. Model Implementation
 The implementation of the CamemBERT-like model from scratch is located in the src/model/ directory. You can directly use this model in your experiments:
 
 ```bash
   from src.model.camembert_model import CamemBERTBase
 ```
 
-5. Evaluation
+6. Evaluation
 Evaluate the performance of your trained model on specific tasks using the evaluation notebooks or scripts:
 
 notebooks/evaluate_nli.ipynb
 notebooks/evaluate_ner.ipynb
 
-6. 📊 Results
+7. 📊 Results
 The project achieves competitive performance on the following tasks:
 
 NLI (Natural Language Inference): Accuracy of 85% on the XNLI dataset.
 NER (Named Entity Recognition): F1-score of 91% on the CoNLL-2003 dataset.
 POS Tagging and Dependency Parsing: Results comparable to the original CamemBERT paper across multiple French treebanks (e.g., GSD, Sequoia).
 
-7. 📂 Project Structure
+8. 📂 Project Structure
 ```bash
 Copy code
 MLA-CamemBERT/
@@ -80,7 +80,7 @@ MLA-CamemBERT/
 └── README.md             # Project documentation
 ```
 
-8. 🤝 Contributors
+9. 🤝 Contributors
 
 - Noureddine Khaous
 - Raid Salhi
