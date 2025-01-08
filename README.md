@@ -37,9 +37,10 @@ The model is designed to be efficient to train and easily integratable into NLP 
 3. 🚀 Usage
 Data Preprocessing
 Use the datasets.py script to handle loading and preparing data for training. Ensure that your datasets are correctly formatted before proceeding:
-
+ ```bash
   python src/datasets.py
-
+ ```
+ 
 4. Training
 All training processes are conducted using Jupyter notebooks located in the notebooks/ directory. You can run the notebooks to train the model from scratch or fine-tune it on specific downstream tasks. 
 
