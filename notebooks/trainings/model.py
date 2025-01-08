@@ -2,6 +2,7 @@ import torch
 import torch.nn as nn
 import math
 import torch.nn.functional as F
+from config import CamembertConfig
 
 class CamembertEmbeddings(nn.Module):
     def __init__(self, config):
