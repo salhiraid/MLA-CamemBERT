@@ -64,24 +64,6 @@ NLI (Natural Language Inference): Accuracy of 85% on the XNLI dataset.
 NER (Named Entity Recognition): F1-score of 91% on the CoNLL-2003 dataset.
 POS Tagging and Dependency Parsing: Results comparable to the original CamemBERT paper across multiple French treebanks (e.g., GSD, Sequoia).
 
-8. 📂 Project Structure
-```bash
-Copy code
-MLA-CamemBERT/
-├── data/                 # Contains raw and processed datasets
-├── notebooks/            # Jupyter notebooks for training and fine-tuning
-│   ├── train_mlm.ipynb   # Notebook for pretraining on MLM
-│   ├── finetune_nli.ipynb # Notebook for fine-tuning on NLI
-│   ├── finetune_ner.ipynb # Notebook for fine-tuning on NER
-│   ├── evaluate_nli.ipynb # Notebook for evaluating NLI task
-├── src/                  # Source code for model and utilities
-│   ├── model/            # Implementation of the CamemBERT model
-│   ├── datasets.py       # Data preprocessing and loading
-│   ├── evaluate.py       # Evaluation script
-├── requirements.txt      # List of Python dependencies
-└── README.md             # Project documentation
-```
-
 9. 🤝 Contributors
 
 - Noureddine Khaous
