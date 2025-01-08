@@ -82,7 +82,7 @@ MLA-CamemBERT/
 
 8. 🤝 Contributors
 
-Noureddine Khaous
-Raid Salhi
-Amine Ouguouenoune
-Ramy Larabi
+- Noureddine Khaous
+- Raid Salhi
+- Amine Ouguouenoune
+- Ramy Larabi
